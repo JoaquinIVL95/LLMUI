@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM UI - Chat con Búsqueda Web</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+
+        .status-indicator.online {
+            background: #10b981;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .message.user {
+            background: #e0e7ff;
+            margin-left: 20%;
+        }
+
+        .message.assistant {
+            background: #f3f4f6;
+            margin-right: 20%;
+        }
+
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .message-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .message.user .message-label {
+            color: #4f46e5;
+        }
+
+        .message.assistant .message-label {
+            color: #059669;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 50px;
+            max-height: 150px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .search-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .search-results {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            height: 600px;
+            overflow-y: auto;
+        }
+
+        .search-results h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .search-result-item {
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .search-result-item h3 {
+            color: #1e40af;
+            margin-bottom: 5px;
+            font-size: 1em;
+        }
+
+        .search-result-item p {
+            color: #4b5563;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .search-result-item a {
+            color: #059669;
+            font-size: 0.85em;
+            text-decoration: none;
+        }
+
+        .search-result-item a:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            color: #6b7280;
+            padding: 20px;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 LLM UI - Chat con Búsqueda Web</h1>
+            <div class="status">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Verificando conexión...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message assistant">
+                        <div class="message-label">Asistente</div>
+                        <div>¡Hola! Soy tu asistente de programación con acceso a búsqueda web. Puedo ayudarte con código, documentación, y buscar información actualizada en internet. ¿En qué puedo ayudarte?</div>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <div class="input-group">
+                        <textarea
+                            id="chatInput"
+                            class="chat-input"
+                            placeholder="Escribe tu pregunta aquí... (Shift+Enter para nueva línea, Enter para enviar)"
+                        ></textarea>
+                        <button id="sendBtn" class="btn btn-primary">Enviar</button>
+                    </div>
+                    <div class="search-toggle">
+                        <label>
+                            <input type="checkbox" id="useSearch" checked>
+                            Usar búsqueda web
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-results">
+                <h2>📋 Resultados de Búsqueda</h2>
+                <div id="searchResultsContainer">
+                    <p class="loading">Los resultados de búsqueda aparecerán aquí...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const useSearchCheckbox = document.getElementById('useSearch');
+        const searchResultsContainer = document.getElementById('searchResultsContainer');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+
+        // Verificar estado de Ollama
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                if (data.status === 'ok') {
+                    statusIndicator.classList.add('online');
+                    statusText.textContent = `✓ Conectado - Modelo: ${data.currentModel}`;
+                } else {
+                    statusIndicator.classList.remove('online');
+                    statusText.textContent = '✗ Ollama no disponible';
+                }
+            } catch (error) {
+                statusIndicator.classList.remove('online');
+                statusText.textContent = '✗ Error de conexión';
+            }
+        }
+
+        // Agregar mensaje al chat
+        function addMessage(text, type = 'assistant') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const label = document.createElement('div');
+            label.className = 'message-label';
+            label.textContent = type === 'user' ? 'Tú' : type === 'error' ? 'Error' : 'Asistente';
+
+            const content = document.createElement('div');
+            // Formatear código si existe
+            const formattedText = text.replace(/```(\w+)?\n([\s\S]+?)```/g, (match, lang, code) => {
+                return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
+            });
+            content.innerHTML = formattedText;
+
+            messageDiv.appendChild(label);
+            messageDiv.appendChild(content);
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Mostrar resultados de búsqueda
+        function displaySearchResults(results) {
+            if (!results || results.length === 0) {
+                searchResultsContainer.innerHTML = '<p class="loading">No se encontraron resultados</p>';
+                return;
+            }
+
+            searchResultsContainer.innerHTML = '';
+            results.forEach((result, index) => {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'search-result-item';
+                resultDiv.innerHTML = `
+                    <h3>${index + 1}. ${escapeHtml(result.title)}</h3>
+                    <p>${escapeHtml(result.snippet)}</p>
+                    ${result.url ? `<a href="${escapeHtml(result.url)}" target="_blank">${escapeHtml(result.url)}</a>` : ''}
+                `;
+                searchResultsContainer.appendChild(resultDiv);
+            });
+        }
+
+        // Enviar mensaje
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+
+            const useSearch = useSearchCheckbox.checked;
+
+            // Agregar mensaje del usuario
+            addMessage(message, 'user');
+            chatInput.value = '';
+            sendBtn.disabled = true;
+
+            // Mostrar loading con temporizador
+            const loadingMsg = 'Pensando';
+            addMessage(loadingMsg, 'assistant');
+            const loadingElement = chatMessages.lastChild.querySelector('div:last-child');
+
+            let dots = 0;
+            let seconds = 0;
+            const loadingInterval = setInterval(() => {
+                dots = (dots + 1) % 4;
+                seconds++;
+                loadingElement.textContent = `${loadingMsg}${'.'.repeat(dots)} (${seconds}s)`;
+            }, 1000);
+
+            if (useSearch) {
+                searchResultsContainer.innerHTML = '<p class="loading">Buscando en internet...</p>';
+            }
+
+            const startTime = Date.now();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message, useSearch })
+                });
+
+                const data = await response.json();
+
+                clearInterval(loadingInterval);
+
+                const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+                console.log(`Respuesta recibida en ${duration}s`);
+
+                // Remover mensaje de loading
+                chatMessages.removeChild(chatMessages.lastChild);
+
+                if (data.error) {
+                    addMessage(data.error, 'error');
+                } else {
+                    addMessage(data.response, 'assistant');
+
+                    if (data.searchResults) {
+                        displaySearchResults(data.searchResults);
+                    } else if (useSearch) {
+                        searchResultsContainer.innerHTML = '<p class="loading">No se encontraron resultados de búsqueda</p>';
+                    }
+                }
+            } catch (error) {
+                clearInterval(loadingInterval);
+                chatMessages.removeChild(chatMessages.lastChild);
+                addMessage('Error: ' + error.message, 'error');
+            } finally {
+                sendBtn.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        // Escape HTML para prevenir XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', sendMessage);
+
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Verificar estado al cargar
+        checkStatus();
+        setInterval(checkStatus, 30000); // Verificar cada 30 segundos
+    </script>
+</body>
+</html>
